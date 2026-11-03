@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decimal Quest: 5th Grade Arcade Platformer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f172a;
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  #game-container {
+    position: relative;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.7);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 3px solid #38bdf8;
+  }
+  canvas {
+    display: block;
+    background: linear-gradient(to bottom, #1e293b, #0f172a);
+  }
+  /* Top Question UI Overlay */
+  #quest-hud {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    background: rgba(15, 23, 42, 0.88);
+    border: 2px solid #38bdf8;
+    border-radius: 10px;
+    padding: 10px 18px;
+    text-align: center;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+  #lesson-tag {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #38bdf8;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  #question-text {
+    font-size: 19px;
+    font-weight: bold;
+    color: #f8fafc;
+  }
+  #score-tag {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    font-size: 16px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.5);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #475569;
+  }
+  #lives-tag {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 16px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.5);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #475569;
+    color: #f87171;
+  }
+  /* Feedback banner */
+  #feedback {
+    position: absolute;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+    font-weight: 800;
+    padding: 6px 20px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .correct { background: #22c55e; color: #fff; }
+  .wrong { background: #ef4444; color: #fff; }
+  /* Controls hint */
+  #controls-info {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #94a3b8;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="850" height="480"></canvas>
+  
+  <div id="score-tag">Score: <span id="score">0</span></div>
+  <div id="lives-tag">Lives: <span id="lives">❤️❤️❤️</span></div>
+
+  <div id="quest-hud">
+    <div id="lesson-tag">Lesson 1: Reading and Writing Decimals</div>
+    <div id="question-text">Loading challenge...</div>
+  </div>
+
+  <div id="feedback">Awesome! +100</div>
+</div>
+
+<div id="controls-info">
+  🎮 <b>Controls:</b> Arrow Keys or <b>[A][D]</b> to Move | <b>[W] / [Space] / [Up]</b> to Jump. Land on or touch the correct orb!
+</div>
+
+<script>
+// --- AUDIO FX SYNTHESIZER (No external files needed) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  if (type === 'jump') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+  } else if (type === 'correct') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(660, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+  } else if (type === 'wrong') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(110, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+  }
+}
+
+// --- CURRICULUM QUESTIONS (Covering all 6 Lessons in the syllabus) ---
+const curriculum = [
+  // Lesson 1: Reading and Writing Decimals
+  {
+    lesson: "Lesson 1: Reading and Writing Decimals",
+    question: 'What is "Three and forty-five hundredths" in standard form?',
+    choices: ["3.045", "3.45", "345.0"],
+    correct: 1
+  },
+  {
+    lesson: "Lesson 1: Reading and Writing Decimals",
+    question: 'How do you write 0.608 in words?',
+    choices: ["Six hundred eight thousandths", "Six and eight tenths", "Sixty-eight hundredths"],
+    correct: 0
+  },
+  // Lesson 2: Relate Decimals and Fractions
+  {
+    lesson: "Lesson 2: Relate Decimals and Fractions",
+    question: 'Which decimal is equivalent to 7 / 100 ?',
+    choices: ["0.7", "0.07", "0.007"],
+    correct: 1
+  },
+  {
+    lesson: "Lesson 2: Relate Decimals and Fractions",
+    question: 'What is 0.375 expressed as a simplified fraction?',
+    choices: ["3/8", "37/50", "1/4"],
+    correct: 0
+  },
+  // Lesson 3: Place Value to Decimals
+  {
+    lesson: "Lesson 3: Place Value to Decimals",
+    question: 'In the number 14.825, what digit is in the THOUSANDTHS place?',
+    choices: ["8", "2", "5"],
+    correct: 2
+  },
+  {
+    lesson: "Lesson 3: Place Value to Decimals",
+    question: 'In 9.471, what is the value of the digit 4?',
+    choices: ["4 hundredths (0.04)", "4 tenths (0.4)", "4 ones (4.0)"],
+    correct: 1
+  },
+  // Lesson 4: Compare Decimals
+  {
+    lesson: "Lesson 4: Compare Decimals",
+    question: 'Which symbol correctly completes:  0.405  __  0.45 ?',
+    choices: [">", "<", "="],
+    correct: 1
+  },
+  {
+    lesson: "Lesson 4: Compare Decimals",
+    question: 'Which of the following is true?',
+    choices: ["1.20 = 1.2", "0.09 > 0.1", "3.408 > 3.48"],
+    correct: 0
+  },
+  // Lesson 5: Order Decimals
+  {
+    lesson: "Lesson 5: Order Decimals",
+    question: 'Which decimal has the SMALLEST value?',
+    choices: ["0.203", "0.099", "0.15"],
+    correct: 1
+  },
+  {
+    lesson: "Lesson 5: Order Decimals",
+    question: 'Which decimal has the GREATEST value?',
+    choices: ["5.49", "5.5", "5.089"],
+    correct: 1
+  },
+  // Lesson 6: Rounding Decimals
+  {
+    lesson: "Lesson 6: Rounding Decimals",
+    question: 'Round 4.76 to the nearest TENTH:',
+    choices: ["4.7", "4.8", "5.0"],
+    correct: 1
+  },
+  {
+    lesson: "Lesson 6: Rounding Decimals",
+    question: 'Round 12.348 to the nearest HUNDREDTH:',
+    choices: ["12.35", "12.34", "12.40"],
+    correct: 0
+  }
+];
+
+// --- GAME ENGINE SETUP ---
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let score = 0;
+let lives = 3;
+let currentQuestIndex = 0;
+
+// Platforms
+const platforms = [
+  { x: 0, y: 440, w: 850, h: 40 },         // Ground
+  { x: 80, y: 320, w: 180, h: 18 },       // Left Platform (Orb A)
+  { x: 335, y: 240, w: 180, h: 18 },      // Center Platform (Orb B)
+  { x: 590, y: 320, w: 180, h: 18 }       // Right Platform (Orb C)
+];
+
+// Orbs placement on top of platforms
+const orbPositions = [
+  { x: 170, y: 260 },
+  { x: 425, y: 180 },
+  { x: 680, y: 260 }
+];
+
+// Hero Player
+const player = {
+  x: 50,
+  y: 380,
+  w: 28,
+  h: 36,
+  vx: 0,
+  vy: 0,
+  speed: 4.8,
+  jumpPower: -11.5,
+  grounded: false
+};
+
+const gravity = 0.52;
+const keys = {};
+
+window.addEventListener("keydown", (e) => {
+  keys[e.code] = true;
+  if (['ArrowUp', 'Space', 'KeyW'].includes(e.code) && player.grounded) {
+    player.vy = player.jumpPower;
+    player.grounded = false;
+    playSound('jump');
+  }
+});
+window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+
+function showFeedback(text, isCorrect) {
+  const fb = document.getElementById("feedback");
+  fb.textContent = text;
+  fb.className = isCorrect ? "correct" : "wrong";
+  fb.style.opacity = "1";
+  setTimeout(() => { fb.style.opacity = "0"; }, 1400);
+}
+
+function updateHUD() {
+  const q = curriculum[currentQuestIndex];
+  document.getElementById("lesson-tag").textContent = q.lesson;
+  document.getElementById("question-text").textContent = q.question;
+  document.getElementById("score").textContent = score;
+  document.getElementById("lives").textContent = "❤️".repeat(lives) || "💀";
+}
+
+function triggerChoice(chosenIndex) {
+  const q = curriculum[currentQuestIndex];
+  if (chosenIndex === q.correct) {
+    playSound('correct');
+    score += 100;
+    showFeedback("Correct! +100 Points 🌟", true);
+    currentQuestIndex = (currentQuestIndex + 1) % curriculum.length;
+  } else {
+    playSound('wrong');
+    lives--;
+    showFeedback("Oops! Try Again (-1 Life) ❌", false);
+    if (lives <= 0) {
+      alert("Game Over! Try again and master the decimal lessons.");
+      lives = 3;
+      score = 0;
+      currentQuestIndex = 0;
+    }
+  }
+  // Reset player start position
+  player.x = 50;
+  player.y = 380;
+  player.vx = 0;
+  player.vy = 0;
+  updateHUD();
+}
+
+// Check player touching orbs
+function checkOrbCollision() {
+  orbPositions.forEach((orb, index) => {
+    const dx = (player.x + player.w / 2) - orb.x;
+    const dy = (player.y + player.h / 2) - orb.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 28) {
+      triggerChoice(index);
+    }
+  });
+}
+
+function update() {
+  // Input horizontal move
+  if (keys["ArrowLeft"] || keys["KeyA"]) {
+    player.vx = -player.speed;
+  } else if (keys["ArrowRight"] || keys["KeyD"]) {
+    player.vx = player.speed;
+  } else {
+    player.vx *= 0.7; // friction
+  }
+
+  // Gravity
+  player.vy += gravity;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Screen Boundaries
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.w > canvas.width) player.x = canvas.width - player.w;
+
+  // Platform collision
+  player.grounded = false;
+  for (const plat of platforms) {
+    if (
+      player.x + player.w > plat.x &&
+      player.x < plat.x + plat.w &&
+      player.y + player.h >= plat.y &&
+      player.y + player.h <= plat.y + 14 &&
+      player.vy >= 0
+    ) {
+      player.grounded = true;
+      player.vy = 0;
+      player.y = plat.y - player.h;
+    }
+  }
+
+  checkOrbCollision();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Decorative Background Stars / Grid
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  // Platforms
+  for (const plat of platforms) {
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+    // Neon platform trim
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(plat.x, plat.y, plat.w, 4);
+  }
+
+  // Draw Answer Orbs
+  const currentOptions = curriculum[currentQuestIndex].choices;
+  const letters = ["A", "B", "C"];
+  const orbColors = ["#ec4899", "#8b5cf6", "#06b6d4"];
+
+  orbPositions.forEach((orb, i) => {
+    // Glowing circle
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = orbColors[i];
+    ctx.fillStyle = orbColors[i];
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Option letter badge
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`[${letters[i]}]`, orb.x, orb.y - 30);
+
+    // Answer text card under orb
+    ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+    const textWidth = ctx.measureText(currentOptions[i]).width + 16;
+    ctx.fillRect(orb.x - textWidth / 2, orb.y + 12, textWidth, 22);
+    ctx.strokeStyle = orbColors[i];
+    ctx.strokeRect(orb.x - textWidth / 2, orb.y + 12, textWidth, 22);
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillText(currentOptions[i], orb.x, orb.y + 27);
+  });
+
+  // Draw Player Character (Caped Arcade Adventurer)
+  ctx.save();
+  // Cape
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(player.x - 3, player.y + 8, 6, 20);
+  // Body
+  ctx.fillStyle = "#38bdf8";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  // Visor / Eyes
+  ctx.fillStyle = "#fef08a";
+  ctx.fillRect(player.x + 8, player.y + 6, 12, 6);
+  // Boots
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(player.x, player.y + player.h - 6, player.w, 6);
+  ctx.restore();
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Initialize
+updateHUD();
+gameLoop();
+</script>
+</body>
+</html>
