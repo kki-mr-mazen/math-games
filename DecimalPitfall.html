@@ -268,7 +268,6 @@
 
         // Load Save Data & Setup Audio
         document.addEventListener("DOMContentLoaded", () => {
-            // Audio setup
             let bgMusic = document.getElementById('bg-music');
             if (bgMusic) {
                 bgMusic.volume = 0.25; 
@@ -279,11 +278,9 @@
             let jumpSfx = document.getElementById('jump-sfx');
             if (jumpSfx) jumpSfx.volume = 0.5; 
 
-            // Load High Score
             highScore = parseInt(localStorage.getItem('decimalPitfallHighScore')) || 0;
             document.getElementById('display-high-score').innerText = highScore;
 
-            // Check for saved game
             let savedLives = parseInt(localStorage.getItem('decimalPitfallLives'));
             if (savedLives && savedLives > 0) {
                 document.getElementById('continue-btn').style.display = 'block';
@@ -399,11 +396,13 @@
                 
                 if (isMult) {
                     qText = `Solve: ${base} x ${p}`;
-                    ans = (parseFloat(base) * p).toString();
+                    let result = parseFloat(base) * p;
+                    ans = parseFloat(result.toPrecision(10)).toString(); // Fixed precision
                     hint = `Hint: Multiplying by ${p}? Move the decimal point ${Math.log10(p)} place(s) to the RIGHT.`;
                 } else {
                     qText = `Solve: ${base} ÷ ${p}`;
-                    ans = (parseFloat(base) / p).toString();
+                    let result = parseFloat(base) / p;
+                    ans = parseFloat(result.toPrecision(10)).toString(); // Fixed precision
                     hint = `Hint: Dividing by ${p}? Move the decimal point ${Math.log10(p)} place(s) to the LEFT.`;
                 }
             
@@ -494,15 +493,21 @@
             let normalizedAnswer = activeQuestion.answer;
             if(normalizedAnswer.startsWith('.')) normalizedAnswer = '0' + normalizedAnswer;
 
+            // Strict String Match OR Valid Mathematical Number Match
+            let isCorrect = false;
             if (normalizedInput === normalizedAnswer) {
-                // Correct Answer
+                isCorrect = true;
+            } else if (!isNaN(normalizedInput) && parseFloat(normalizedInput) === parseFloat(normalizedAnswer)) {
+                isCorrect = true;
+            }
+
+            if (isCorrect) {
                 panel.style.display = 'none';
                 score += 10;
                 saveGame();
                 updateHUD();
                 jumpAcrossPit();
             } else {
-                // Incorrect Answer
                 panel.classList.add('shake');
                 setTimeout(() => panel.classList.remove('shake'), 400);
                 document.getElementById('player-input').value = "";
@@ -584,7 +589,7 @@
                         croc.style.bottom = '-20px'; 
                         
                         setTimeout(() => {
-                            clearSave(); // Erase current run save on game over
+                            clearSave(); 
                             document.getElementById('final-score').innerText = score;
                             document.getElementById('display-high-score').innerText = highScore;
                             document.getElementById('game-over-screen').style.display = 'flex';
